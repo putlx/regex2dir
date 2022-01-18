@@ -1,7 +1,8 @@
+use anyhow::Result;
 use clap::Parser;
 use regex_automata::{dense, DFA};
 use std::collections::{hash_map, HashMap};
-use std::{error, fs, io, path};
+use std::{fs, io, path};
 
 fn walk<T: DFA>(
     dfa: &T,
@@ -45,7 +46,7 @@ struct Args {
     directory: String,
 }
 
-fn main() -> Result<(), Box<dyn error::Error>> {
+fn main() -> Result<()> {
     let args = Args::parse();
     let dfa = dense::Builder::new()
         .anchored(args.anchor)
