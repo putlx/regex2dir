@@ -1,8 +1,9 @@
 [package]
 name = "regex2dir"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2018"
 
 [dependencies]
 regex-automata = "0.1"
 clap = "2.33"
+pathdiff = "0.2.1"

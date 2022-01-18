@@ -1,15 +1,13 @@
 use clap::{App, AppSettings, Arg};
 use regex_automata::{dense, DFA};
-use std::boxed::Box;
 use std::collections::{hash_map, HashMap};
-use std::path::{Path, PathBuf};
-use std::{env, error, fs, io};
+use std::{error, fs, io, path};
 
 fn walk<T: DFA>(
     dfa: &T,
-    state_to_dir: &mut HashMap<T::ID, Box<Path>>,
+    state_to_dir: &mut HashMap<T::ID, Box<path::Path>>,
     state: T::ID,
-    path: PathBuf,
+    path: path::PathBuf,
 ) -> io::Result<()> {
     if dfa.is_match_state(state) {
         fs::File::create(path.join("ACCEPT"))?;
@@ -17,22 +15,19 @@ fn walk<T: DFA>(
     for input in (32..=45).chain(48..=126) {
         let current = dfa.next_state(state, input);
         if !dfa.is_dead_state(current) {
+            let new_path = path.join(&String::from_utf8_lossy(&[input]).into_owned());
             match state_to_dir.entry(current) {
                 hash_map::Entry::Occupied(entry) => {
-                    let original = entry.get().canonicalize()?;
-                    let current_dir = env::current_dir()?;
-                    env::set_current_dir(path.as_path())?;
-                    std::os::unix::fs::symlink(
-                        original,
-                        String::from_utf8_lossy(&[input]).into_owned(),
-                    )?;
-                    env::set_current_dir(current_dir)?;
+                    let mut original = pathdiff::diff_paths(entry.get(), path.as_path()).unwrap();
+                    if original.to_str().unwrap().is_empty() {
+                        original.push(".");
+                    }
+                    std::os::unix::fs::symlink(original, new_path)?;
                 }
                 hash_map::Entry::Vacant(entry) => {
-                    let path = path.join(&String::from_utf8_lossy(&[input]).into_owned());
-                    fs::create_dir(path.as_path())?;
-                    entry.insert(path.to_owned().into_boxed_path());
-                    walk(dfa, state_to_dir, current, path)?;
+                    fs::create_dir(new_path.as_path())?;
+                    entry.insert(new_path.to_owned().into_boxed_path());
+                    walk(dfa, state_to_dir, current, new_path)?;
                 }
             }
         }
@@ -58,12 +53,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let root = matches.value_of("DIRECTORY").unwrap();
     fs::create_dir(root)?;
     let mut state_to_dir = HashMap::new();
-    state_to_dir.insert(dfa.start_state(), PathBuf::from(root).into_boxed_path());
+    state_to_dir.insert(
+        dfa.start_state(),
+        path::PathBuf::from(root).into_boxed_path(),
+    );
     walk(
         &dfa,
         &mut state_to_dir,
         dfa.start_state(),
-        PathBuf::from(root),
+        path::PathBuf::from(root),
     )?;
     Ok(())
 }
